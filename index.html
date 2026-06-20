@@ -15,7 +15,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 a{color:var(--accent);text-decoration:none}
 
 /* HEADER */
-.top-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 24px;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-muted);position:sticky;top:0;z-index:100;backdrop-filter:blur(20px)}
+.top-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 24px;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-muted)}
 .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px;animation:pulse 2s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,230,118,.4)}50%{opacity:.8;box-shadow:0 0 0 6px rgba(0,230,118,0)}}
 
@@ -125,7 +125,21 @@ nav{position:sticky;top:0;z-index:99;background:rgba(10,10,15,.9);backdrop-filte
 .nav-links{display:flex;gap:20px}
 .nav-links a{color:var(--text-muted);font-size:13px;font-weight:600;transition:.2s}
 .nav-links a:hover{color:var(--accent)}
-@media(max-width:640px){.nav-links{gap:12px}.nav-links a{font-size:12px}}
+.hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:8px;background:none;border:none}
+.hamburger span{display:block;width:24px;height:2px;background:var(--text-muted);border-radius:2px;transition:.3s}
+.hamburger.open span:nth-child(1){transform:rotate(45deg) translate(5px,5px)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:rotate(-45deg) translate(5px,-5px)}
+@media(max-width:640px){
+.nav-links{display:none;position:absolute;top:56px;left:0;right:0;background:rgba(10,10,15,.98);flex-direction:column;padding:16px 24px;gap:12px;border-bottom:1px solid var(--border);backdrop-filter:blur(20px)}
+.nav-links.open{display:flex}
+.nav-links a{font-size:14px;padding:8px 0}
+.hamburger{display:flex!important}
+.top-bar{flex-wrap:wrap;gap:4px;font-size:11px}
+.dash-grid{grid-template-columns:1fr}
+.pipeline{grid-template-columns:1fr}
+.pipe-arrow{display:none}
+}
 </style>
 </head>
 <body>
@@ -138,12 +152,15 @@ nav{position:sticky;top:0;z-index:99;background:rgba(10,10,15,.9);backdrop-filte
 <nav>
 <div class="nav-inner">
 <div class="nav-logo">📡 自主前哨</div>
-<div class="nav-links">
-<a href="#pipeline">運作流程</a>
-<a href="#dashboard">即時監控</a>
-<a href="#newsroom">新聞分部</a>
-<a href="#architecture">系統架構</a>
-<a href="#tech">技術棧</a>
+<button class="hamburger" id="hamburgerBtn" onclick="toggleMobileNav()" aria-label="選單">
+<span></span><span></span><span></span>
+</button>
+<div class="nav-links" id="navLinks">
+<a href="#pipeline" onclick="closeMobileNav()">運作流程</a>
+<a href="#dashboard" onclick="closeMobileNav()">即時監控</a>
+<a href="#newsroom" onclick="closeMobileNav()">新聞分部</a>
+<a href="#architecture" onclick="closeMobileNav()">系統架構</a>
+<a href="#tech" onclick="closeMobileNav()">技術棧</a>
 </div>
 </div>
 </nav>
@@ -234,7 +251,7 @@ nav{position:sticky;top:0;z-index:99;background:rgba(10,10,15,.9);backdrop-filte
 </div>
 <div class="metric-card">
 <div class="metric-val">24/7</div>
-<div class="label">全年無休運行</div>
+<div class="metric-label">全年無休運行</div>
 </div>
 </div>
 </section>
@@ -419,6 +436,20 @@ Hermes Agent · Xiaomi MiMo 2.5 Pro · 零人工干預<br><br>
 </footer>
 
 <script>
+// Calculate next run date for a given schedule
+function nextRunDate(schedule){
+const now=new Date();
+const isDaily=schedule.includes('每日');
+const isWeekday=schedule.includes('週一至五');
+const timeMatch=schedule.match(/(\d{2}:\d{2})/);
+if(!timeMatch)return '';
+const [h,m]=timeMatch[1].split(':').map(Number);
+const next=new Date(now);next.setHours(h,m,0,0);
+if(next<=now)next.setDate(next.getDate()+1);
+if(isWeekday){while(next.getDay()===0||next.getDay()===6)next.setDate(next.getDate()+1)}
+return next.toLocaleDateString('zh-HK',{month:'2-digit',day:'2-digit',weekday:'short'});
+}
+
 // Job data from real cron system
 const JOBS=[
 {id:'35e4ad1a',name:'天氣報告',icon:'🌤️',dept:'天氣',schedule:'07:40 週一至五',nextRun:'2026-06-22',status:'ok'},
@@ -444,22 +475,26 @@ const JOBS=[
 
 // Render job grid
 const grid=document.getElementById('jobGrid');
-grid.innerHTML=JOBS.map(j=>`
+grid.innerHTML=JOBS.map(j=>{
+const nr=nextRunDate(j.schedule);
+return `
 <div class="job-card">
 <div class="job-icon">${j.icon}</div>
 <div class="job-info">
 <div class="job-name">${j.name}</div>
-<div class="job-meta">${j.dept}部 · ID: ${j.id}</div>
+<div class="job-meta">${j.dept}部 · ID: ${j.id}${nr?' · 下次: '+nr:''}</div>
 </div>
 <div class="job-schedule">${j.schedule}</div>
 <div class="job-status ${j.status}"></div>
-</div>`).join('');
+</div>`}).join('');
 
-// Scroll animations
+// Scroll animations with fallback
 const observer=new IntersectionObserver(entries=>{
 entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target)}});
 },{threshold:0.1,rootMargin:'40px'});
 document.querySelectorAll('.fade-up').forEach(el=>observer.observe(el));
+// Fallback: make all visible after 2s
+setTimeout(()=>{document.querySelectorAll('.fade-up:not(.visible)').forEach(el=>el.classList.add('visible'))},2000);
 
 // Animate numbers
 function animateNum(el,target,suffix=''){
@@ -480,6 +515,27 @@ document.querySelector('.top-bar div:last-child').textContent=`📡 Hermes Agent
 }
 setInterval(updateTime,1000);
 updateTime();
+
+// Dynamic uptime calculation
+const launchDate=new Date('2026-05-01');
+const today=new Date();
+const uptimeDays=Math.floor((today-launchDate)/(1000*60*60*24));
+const uptimeEl=document.getElementById('uptimeDays');
+if(uptimeEl)uptimeEl.textContent=uptimeDays+'+';
+
+// Dynamic total runs estimate (rough: 19 tasks/day * uptime days)
+const totalRunsEl=document.getElementById('totalRuns');
+if(totalRunsEl)totalRunsEl.textContent=Math.floor(uptimeDays*17)+'+';
+
+// Mobile nav toggle
+function toggleMobileNav(){
+document.getElementById('hamburgerBtn').classList.toggle('open');
+document.getElementById('navLinks').classList.toggle('open');
+}
+function closeMobileNav(){
+document.getElementById('hamburgerBtn').classList.remove('open');
+document.getElementById('navLinks').classList.remove('open');
+}
 </script>
 </body>
 </html>
